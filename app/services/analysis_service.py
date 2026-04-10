@@ -273,3 +273,122 @@ class AnalysisService:
                 "Theorique emballage = Synthese Totaux (A5:F14)",
             ],
         }
+
+    @staticmethod
+    def build_control_variance_report(all_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Compare real vs entry pages (Entrée Emb & Ingr, Entrée Appro Viande) - same format as build_variance_report."""
+        fiche = all_data.get("fiche_consommation", {})
+        control_emb_ingr = all_data.get("fiche_emb_ingredient", {})
+        control_viande = all_data.get("fiche_appro_viande", {})
+
+        fiche_rows = fiche.get("data", []) if isinstance(fiche, dict) else []
+        entry_emb_rows = control_emb_ingr.get("data", []) if isinstance(control_emb_ingr, dict) else []
+        entry_viande_rows = control_viande.get("data", []) if isinstance(control_viande, dict) else []
+
+        # Extract real values from Fiche Consommation
+        real = AnalysisService._extract_real_by_name(fiche_rows)
+        
+        # Extract entry Emb & Ingr as dict {normalized_name: qty} using correct column name "Quantité (Kg/L/Pcs)"
+        entry_emb = {}
+        for row in entry_emb_rows:
+            name = str(row.get("Désignation", "")).strip()
+            qty = AnalysisService._to_float(row.get("Quantité (Kg/L/Pcs)"))
+            if name:
+                entry_emb[AnalysisService._norm(name)] = qty
+
+        # Extract entry Viande as dict {normalized_name: qty} using correct column name "Quantité (Kg)"
+        entry_viande = {}
+        for row in entry_viande_rows:
+            name = str(row.get("Désignation", "")).strip()
+            qty = AnalysisService._to_float(row.get("Quantité (Kg)"))
+            if name:
+                entry_viande[AnalysisService._norm(name)] = qty
+
+        # Build emb_ingr variances (from Entrée Emb & Ingr)
+        emb_ingr_variances = []
+        real_emb_total = 0.0
+        entry_emb_total = 0.0
+
+        # Add rows for each unique metric in entry_emb
+        for norm_name, entry_qty in entry_emb.items():
+            real_qty = real.get(norm_name, 0.0)
+            real_emb_total += real_qty
+            entry_emb_total += entry_qty
+
+            # Try to find display name from fiche
+            display_name = norm_name
+            for fiche_row in fiche_rows:
+                if AnalysisService._norm(fiche_row.get("Matière première/ingrédient/matériel d'emballage", "")) == norm_name:
+                    display_name = str(fiche_row.get("Matière première/ingrédient/matériel d'emballage", "")).strip()
+                    break
+
+            emb_ingr_variances.append({
+                "metric": display_name,
+                "real": round(real_qty, 2),
+                "theoretical": round(entry_qty, 2),
+                "gap": round(real_qty - entry_qty, 2),
+                "gap_pct": round(AnalysisService._pct_gap(real_qty, entry_qty), 2),
+            })
+
+        # Build appro_viande variances (from Entrée Appro Viande)
+        appro_viande_variances = []
+        real_viande_total = 0.0
+        entry_viande_total = 0.0
+
+        for norm_name, entry_qty in entry_viande.items():
+            real_qty = real.get(norm_name, 0.0)
+            real_viande_total += real_qty
+            entry_viande_total += entry_qty
+
+            # Try to find display name from fiche
+            display_name = norm_name
+            for fiche_row in fiche_rows:
+                if AnalysisService._norm(fiche_row.get("Matière première/ingrédient/matériel d'emballage", "")) == norm_name:
+                    display_name = str(fiche_row.get("Matière première/ingrédient/matériel d'emballage", "")).strip()
+                    break
+
+            appro_viande_variances.append({
+                "metric": display_name,
+                "real": round(real_qty, 2),
+                "theoretical": round(entry_qty, 2),
+                "gap": round(real_qty - entry_qty, 2),
+                "gap_pct": round(AnalysisService._pct_gap(real_qty, entry_qty), 2),
+            })
+
+        summary = {
+            "real_totals": {
+                "emb_ingr_kg": round(real_emb_total, 2),
+                "appro_viande_kg": round(real_viande_total, 2),
+            },
+            "theoretical_totals": {
+                "entry_emb_ingr_kg": round(entry_emb_total, 2),
+                "entry_appro_viande_kg": round(entry_viande_total, 2),
+            },
+            "efficiency": {
+                "emb_ingr_gap_kg": round(real_emb_total - entry_emb_total, 2),
+                "emb_ingr_gap_pct": round(AnalysisService._pct_gap(real_emb_total, entry_emb_total), 2),
+                "appro_viande_gap_kg": round(real_viande_total - entry_viande_total, 2),
+                "appro_viande_gap_pct": round(AnalysisService._pct_gap(real_viande_total, entry_viande_total), 2),
+            },
+        }
+
+        # Top 5 absolute gaps for operations focus
+        combined_rows = []
+        for row in emb_ingr_variances:
+            combined_rows.append({"type": "emballage", **row, "abs_gap": abs(row["gap"])})
+        for row in appro_viande_variances:
+            combined_rows.append({"type": "viande", **row, "abs_gap": abs(row["gap"])})
+
+        top_gaps = sorted(combined_rows, key=lambda x: x["abs_gap"], reverse=True)[:5]
+
+        return {
+            "summary": summary,
+            "emb_ingr_variances": emb_ingr_variances,
+            "appro_viande_variances": appro_viande_variances,
+            "top_gaps": top_gaps,
+            "notes": [
+                "Reel = Fiche Consommation (A5:G36)",
+                "Entrée Emb & Ingr = Contrôle_Appro_EMB & INGR (A3:H30)",
+                "Entrée Appro Viande = Contrôle_Appro_viande (A3:H18)",
+            ],
+        }
