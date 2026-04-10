@@ -270,7 +270,13 @@ class CacheManager:
     @staticmethod
     def list_available_dates() -> Dict[str, Any]:
         """List available snapshot dates per key and globally."""
-        keys = ["fiche_consommation", "calcul_viande", "emballage_synthese"]
+        keys = [
+            "fiche_consommation",
+            "fiche_emb_ingredient",
+            "fiche_appro_viande",
+            "calcul_viande",
+            "emballage_synthese",
+        ]
         result: Dict[str, Any] = {"by_key": {}, "all_dates": []}
         all_dates = set()
 
@@ -299,6 +305,10 @@ class CacheManager:
         # Load from Excel
         if key == "fiche_consommation":
             data = ExcelReader.get_fiche_consommation()
+        elif key == "fiche_emb_ingredient":
+            data = ExcelReader.get_fiche_emb_ingredient()
+        elif key == "fiche_appro_viande":
+            data = ExcelReader.get_fiche_appro_viande()
         elif key == "calcul_viande":
             data = ExcelReader.get_calcul_viande()
         elif key == "emballage_synthese":
@@ -347,7 +357,13 @@ class CacheManager:
 
         all_data = {}
 
-        for key in ["fiche_consommation", "calcul_viande", "emballage_synthese"]:
+        for key in [
+            "fiche_consommation",
+            "fiche_emb_ingredient",
+            "fiche_appro_viande",
+            "calcul_viande",
+            "emballage_synthese",
+        ]:
             try:
                 all_data[key] = CacheManager.get_data_by_view(
                     key,

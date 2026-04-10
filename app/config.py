@@ -36,6 +36,16 @@ EXCEL_FILES = {
         "sheet_name": "FICHE CONSOMATION JOURNALIERE",
         "cache_file": "fiche_consommation.json"
     },
+    "fiche_emb_ingredient": {
+        "file_name": "Fiche_Complète_Contrôle_Approvisionnement_Interne.xlsx",
+        "sheet_name": "Contrôle_Appro_EMB & INGR",
+        "cache_file": "fiche_emb_ingredient.json"
+    },
+    "fiche_appro_viande": {
+        "file_name": "Fiche_Complète_Contrôle_Approvisionnement_Interne.xlsx",
+        "sheet_name": "Contrôle_Appro_viande",
+        "cache_file": "fiche_appro_viande.json"
+    },
     "calcul_viande": {
         "file_name": "Calculateur_Ing_Viande 07,03,2026.xlsx",
         "sheet_name": "📊 Conso Journalière",

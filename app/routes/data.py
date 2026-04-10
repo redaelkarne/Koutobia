@@ -103,6 +103,74 @@ async def get_calcul_viande(
         code = 404 if "No snapshot found" in str(e) else 500
         return JSONResponse(status_code=code, content={"success": False, "error": str(e)})
 
+@router.get("/data/fiche-emb-ingredient")
+async def get_fiche_emb_ingredient(
+    use_cache: bool = Query(True),
+    view: str = Query("general", pattern="^(general|day|month|range)$"),
+    date: str | None = Query(None),
+    month: str | None = Query(None),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
+):
+    """Get fiche contrôle emballage/ingrédients data."""
+    try:
+        data = CacheManager.get_data_by_view(
+            "fiche_emb_ingredient",
+            use_cache=use_cache,
+            view=view,
+            snapshot_date=date,
+            snapshot_month=month,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        return {
+            "success": True,
+            "data": data,
+            "from_cache": use_cache,
+            "view": view,
+            "date": date,
+            "month": month,
+            "date_from": date_from,
+            "date_to": date_to,
+        }
+    except Exception as e:
+        code = 404 if "No snapshot found" in str(e) else 500
+        return JSONResponse(status_code=code, content={"success": False, "error": str(e)})
+
+@router.get("/data/fiche-appro-viande")
+async def get_fiche_appro_viande(
+    use_cache: bool = Query(True),
+    view: str = Query("general", pattern="^(general|day|month|range)$"),
+    date: str | None = Query(None),
+    month: str | None = Query(None),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
+):
+    """Get fiche contrôle appro viande data."""
+    try:
+        data = CacheManager.get_data_by_view(
+            "fiche_appro_viande",
+            use_cache=use_cache,
+            view=view,
+            snapshot_date=date,
+            snapshot_month=month,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        return {
+            "success": True,
+            "data": data,
+            "from_cache": use_cache,
+            "view": view,
+            "date": date,
+            "month": month,
+            "date_from": date_from,
+            "date_to": date_to,
+        }
+    except Exception as e:
+        code = 404 if "No snapshot found" in str(e) else 500
+        return JSONResponse(status_code=code, content={"success": False, "error": str(e)})
+
 @router.get("/data/emballage-synthese")
 async def get_emballage_synthese(
     use_cache: bool = Query(True),
@@ -211,6 +279,37 @@ async def get_variance_analysis(
     except Exception as e:
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
+@router.get("/analysis/control")
+async def get_control_analysis(
+    view: str = Query("general", pattern="^(general|day|month|range)$"),
+    date: str | None = Query(None),
+    month: str | None = Query(None),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
+):
+    """Get control analysis: real (fiche) vs control (Contrôle Emb+Ingr, Contrôle Appro Viande)."""
+    try:
+        all_data = CacheManager.get_all_data(
+            use_cache=True,
+            view=view,
+            snapshot_date=date,
+            snapshot_month=month,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        analysis = AnalysisService.build_control_variance_report(all_data)
+        return {
+            "success": True,
+            "view": view,
+            "date": date,
+            "month": month,
+            "date_from": date_from,
+            "date_to": date_to,
+            "data": analysis,
+        }
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
 @router.post("/upload/fiche-consommation")
 async def upload_fiche_consommation(file: UploadFile = File(...)):
     """Upload new fiche consommation file"""
@@ -230,6 +329,10 @@ async def upload_fiche_consommation(file: UploadFile = File(...)):
         # Always process from uploaded file first to avoid dependency on existing source file.
         data = ExcelReader.get_fiche_consommation(file_path=file_path)
         CacheManager.save_to_cache("fiche_consommation", data, snapshot_date=snapshot_date)
+        emb_ing_data = ExcelReader.get_fiche_emb_ingredient(file_path=file_path)
+        CacheManager.save_to_cache("fiche_emb_ingredient", emb_ing_data, snapshot_date=snapshot_date)
+        appro_viande_data = ExcelReader.get_fiche_appro_viande(file_path=file_path)
+        CacheManager.save_to_cache("fiche_appro_viande", appro_viande_data, snapshot_date=snapshot_date)
 
         # Try to synchronize the canonical source file, but do not fail the request if copy fails.
         copy_warning = None

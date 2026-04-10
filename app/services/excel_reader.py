@@ -1,6 +1,6 @@
 import openpyxl
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 from app.config import EXCEL_FILES, EXCEL_DIR
 
@@ -13,6 +13,85 @@ class ExcelReader:
         if file_path is not None:
             return Path(file_path)
         return EXCEL_DIR / file_name
+
+    @staticmethod
+    def _get_sheet(workbook, config: Dict[str, Any]):
+        """Get worksheet by configured name with optional aliases."""
+        candidates: List[str] = [config.get("sheet_name", "")]
+        candidates.extend(config.get("sheet_aliases", []))
+        for name in candidates:
+            if name and name in workbook.sheetnames:
+                return workbook[name]
+        raise ValueError(f"Sheet not found. Tried: {candidates}")
+
+    @staticmethod
+    def _unique_headers(worksheet, header_row: int, start_col: int, end_col: int) -> List[str]:
+        headers: List[str] = []
+        seen = set()
+        for col_idx in range(start_col, end_col + 1):
+            value = worksheet.cell(row=header_row, column=col_idx).value
+            header = str(value).strip() if value is not None and str(value).strip() else f"Colonne_{col_idx}"
+            base = header
+            suffix = 2
+            while header in seen:
+                header = f"{base}_{suffix}"
+                suffix += 1
+            seen.add(header)
+            headers.append(header)
+        return headers
+
+    @staticmethod
+    def _row_title(worksheet, row_idx: int, start_col: int, end_col: int) -> str:
+        for merged_range in worksheet.merged_cells.ranges:
+            if merged_range.min_row <= row_idx <= merged_range.max_row:
+                if merged_range.max_col < start_col or merged_range.min_col > end_col:
+                    continue
+                top_left = worksheet.cell(row=merged_range.min_row, column=merged_range.min_col).value
+                if top_left is not None and str(top_left).strip():
+                    return str(top_left).strip()
+
+        for col_idx in range(start_col, end_col + 1):
+            value = worksheet.cell(row=row_idx, column=col_idx).value
+            if value is not None and str(value).strip():
+                return str(value).strip()
+
+        return "Sans section"
+
+    @staticmethod
+    def _extract_rect_table(
+        worksheet,
+        *,
+        header_row: int,
+        data_start_row: int,
+        data_end_row: int,
+        start_col: int,
+        end_col: int,
+        section_title_row: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        headers = ExcelReader._unique_headers(worksheet, header_row, start_col, end_col)
+
+        section_title = None
+        if section_title_row is not None:
+            section_title = ExcelReader._row_title(worksheet, section_title_row, start_col, end_col)
+
+        records = []
+        for row_idx in range(data_start_row, data_end_row + 1):
+            row_values = [worksheet.cell(row=row_idx, column=col_idx).value for col_idx in range(start_col, end_col + 1)]
+            if all(value is None or str(value).strip() == "" for value in row_values):
+                continue
+
+            row_record: Dict[str, Any] = {}
+            if section_title is not None:
+                row_record["Section"] = section_title
+
+            for idx, header in enumerate(headers):
+                value = row_values[idx]
+                row_record[header] = "" if value is None else value
+
+            records.append(row_record)
+
+        columns = ["Section", *headers] if section_title is not None else headers
+        return {"columns": columns, "data": records}
     
     @staticmethod
     def get_fiche_consommation(file_path: Optional[Path] = None) -> Dict[str, Any]:
@@ -180,12 +259,76 @@ class ExcelReader:
             "source_range": "A5:F14",
             "last_updated": datetime.now().isoformat()
         }
+
+    @staticmethod
+    def get_fiche_emb_ingredient(file_path: Optional[Path] = None) -> Dict[str, Any]:
+        """Extract Controle Emb/Ingr from A3:H3 headers, title in row 4, data rows 5..30."""
+        config = EXCEL_FILES["fiche_emb_ingredient"]
+        source_file = ExcelReader._resolve_file_path(config["file_name"], file_path)
+        if not source_file.exists():
+            raise FileNotFoundError(f"File not found: {source_file}")
+
+        workbook = openpyxl.load_workbook(source_file, data_only=True)
+        worksheet = ExcelReader._get_sheet(workbook, config)
+
+        extracted = ExcelReader._extract_rect_table(
+            worksheet,
+            header_row=3,
+            data_start_row=5,
+            data_end_row=30,
+            start_col=1,
+            end_col=8,
+            section_title_row=4,
+        )
+
+        workbook.close()
+        return {
+            "name": "Contrôle Emballage et Ingrédients",
+            "data": extracted["data"],
+            "columns": extracted["columns"],
+            "row_count": len(extracted["data"]),
+            "source_range": "A3:H30 (titre fusionne en ligne 4)",
+            "last_updated": datetime.now().isoformat(),
+        }
+
+    @staticmethod
+    def get_fiche_appro_viande(file_path: Optional[Path] = None) -> Dict[str, Any]:
+        """Extract Controle Appro Viande from A3:H3 headers, title in row 4, data rows 5..18."""
+        config = EXCEL_FILES["fiche_appro_viande"]
+        source_file = ExcelReader._resolve_file_path(config["file_name"], file_path)
+        if not source_file.exists():
+            raise FileNotFoundError(f"File not found: {source_file}")
+
+        workbook = openpyxl.load_workbook(source_file, data_only=True)
+        worksheet = ExcelReader._get_sheet(workbook, config)
+
+        extracted = ExcelReader._extract_rect_table(
+            worksheet,
+            header_row=3,
+            data_start_row=5,
+            data_end_row=18,
+            start_col=1,
+            end_col=8,
+            section_title_row=4,
+        )
+
+        workbook.close()
+        return {
+            "name": "Contrôle Appro Viande",
+            "data": extracted["data"],
+            "columns": extracted["columns"],
+            "row_count": len(extracted["data"]),
+            "source_range": "A3:H18 (titre fusionne en ligne 4)",
+            "last_updated": datetime.now().isoformat(),
+        }
     
     @staticmethod
     def get_all_data() -> Dict[str, Any]:
         """Load all Excel data"""
         return {
             "fiche_consommation": ExcelReader.get_fiche_consommation(),
+            "fiche_emb_ingredient": ExcelReader.get_fiche_emb_ingredient(),
+            "fiche_appro_viande": ExcelReader.get_fiche_appro_viande(),
             "calcul_viande": ExcelReader.get_calcul_viande(),
             "emballage_synthese": ExcelReader.get_emballage_synthese(),
             "timestamp": datetime.now().isoformat()

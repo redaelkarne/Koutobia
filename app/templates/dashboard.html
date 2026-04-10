@@ -164,6 +164,13 @@
             overflow: hidden;
         }
 
+        #tab-analytics .card-content,
+        #tab-analytics-viande .card-content {
+            height: auto;
+            min-height: 620px;
+            overflow: visible;
+        }
+
         .loading {
             display: flex;
             justify-content: center;
@@ -290,6 +297,23 @@
             background: #f6fbff;
         }
 
+        .analysis-table {
+            font-size: 1rem;
+            min-width: 980px;
+        }
+
+        .analysis-table th {
+            font-size: 0.98rem;
+            padding: 14px 16px;
+            white-space: nowrap;
+        }
+
+        .analysis-table td {
+            font-size: 0.97rem;
+            padding: 13px 16px;
+            white-space: nowrap;
+        }
+
         .tabs {
             display: flex;
             gap: 0;
@@ -381,6 +405,10 @@
             min-height: 180px;
         }
 
+        #tab-analytics-viande .chart-wrap {
+            min-height: 320px;
+        }
+
         @media (max-width: 900px) {
             .kpi-strip {
                 grid-template-columns: repeat(2, minmax(130px, 1fr));
@@ -436,6 +464,14 @@
                 <div class="value" id="stat-fiche">-</div>
             </div>
             <div class="stat-card">
+                <h3>Contrôle Emb/Ingr</h3>
+                <div class="value" id="stat-emb-ingr">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Contrôle Appro Viande</h3>
+                <div class="value" id="stat-appro-viande">-</div>
+            </div>
+            <div class="stat-card">
                 <h3>Calcul Viande</h3>
                 <div class="value" id="stat-viande">-</div>
             </div>
@@ -448,9 +484,12 @@
         <!-- Tabs Navigation -->
         <div class="tabs">
             <button class="tab active" onclick="switchTab('fiche', this)">Fiche Consommation</button>
+            <button class="tab" onclick="switchTab('emb-ingr', this)">Entrée Emb/Ingr</button>
+            <button class="tab" onclick="switchTab('appro-viande', this)">Entrée Appro Viande</button>
             <button class="tab" onclick="switchTab('viande', this)">Calcul Viande</button>
             <button class="tab" onclick="switchTab('emballage', this)">Emballage</button>
-            <button class="tab" onclick="switchTab('analytics', this)">Analyse</button>
+            <button class="tab" onclick="switchTab('analytics', this)">Analyse Théorique</button>
+            <button class="tab" onclick="switchTab('control-analytics', this)">Analyse Entrée</button>
         </div>
 
         <!-- Dashboard Grid -->
@@ -467,6 +506,42 @@
                                     <tr id="fiche-headers"></tr>
                                 </thead>
                                 <tbody id="fiche-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controle Emb/Ingr Tab -->
+            <div id="tab-emb-ingr" class="tab-content card full-width">
+                <h2>🧪 Entrée Emballage et Ingrédients</h2>
+                <div class="card-content">
+                    <div class="loading" id="loading-emb-ingr">Chargement...</div>
+                    <div id="emb-ingr-info" style="display: none;">
+                        <div class="table-container">
+                            <table id="emb-ingr-table">
+                                <thead>
+                                    <tr id="emb-ingr-headers"></tr>
+                                </thead>
+                                <tbody id="emb-ingr-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controle Appro Viande Tab -->
+            <div id="tab-appro-viande" class="tab-content card full-width">
+                <h2>🍗 Entrée Appro Viande</h2>
+                <div class="card-content">
+                    <div class="loading" id="loading-appro-viande">Chargement...</div>
+                    <div id="appro-viande-info" style="display: none;">
+                        <div class="table-container">
+                            <table id="appro-viande-table">
+                                <thead>
+                                    <tr id="appro-viande-headers"></tr>
+                                </thead>
+                                <tbody id="appro-viande-body"></tbody>
                             </table>
                         </div>
                     </div>
@@ -520,10 +595,29 @@
             </div>
 
             <div id="tab-analytics-viande" class="tab-content card">
-                <h2>📊 Top écarts opérationnels</h2>
+                <h2>📊 Écarts opérationnels (tous produits)</h2>
                 <div class="card-content">
                     <div id="analysis-gaps" class="analysis-layout">
                         <div class="loading">Chargement des écarts...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Control Analysis Tab -->
+            <div id="tab-control-analytics" class="tab-content card">
+                <h2>🔍 Analyse Réel vs Entrée</h2>
+                <div class="card-content">
+                    <div id="control-analysis-summary" class="analysis-layout">
+                        <div class="loading">Chargement des KPI...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-control-analytics-detail" class="tab-content card">
+                <h2>📋 Détail Réel vs Entrée</h2>
+                <div class="card-content">
+                    <div id="control-analysis-detail" class="analysis-layout">
+                        <div class="loading">Chargement des détails...</div>
                     </div>
                 </div>
             </div>
@@ -566,7 +660,12 @@
             overview: null,
             variance: null,
             topGaps: null,
+            controlOverview: null,
+            controlVariance: null,
+            controlTopGaps: null,
         };
+        let analysisFilterType = 'all';
+        let analysisFilterProduct = 'all';
 
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
@@ -631,6 +730,7 @@
                     allData = result.data;
                     updateDashboard();
                     await loadAnalysis();
+                    await loadControlAnalysis();
                     if (currentView === 'day' && currentDate) {
                         document.getElementById('status-text').textContent = `✅ Vue par jour: ${currentDate}`;
                     } else if (currentView === 'month' && currentMonth) {
@@ -687,6 +787,18 @@
             } else {
                 clearTable('fiche', allData.fiche_consommation?.error || 'Aucune donnée pour ce filtre');
             }
+            if (allData.fiche_emb_ingredient?.data) {
+                document.getElementById('stat-emb-ingr').textContent = allData.fiche_emb_ingredient.row_count || '0';
+                displayTable('emb-ingr', allData.fiche_emb_ingredient);
+            } else {
+                clearTable('emb-ingr', allData.fiche_emb_ingredient?.error || 'Aucune donnée pour ce filtre');
+            }
+            if (allData.fiche_appro_viande?.data) {
+                document.getElementById('stat-appro-viande').textContent = allData.fiche_appro_viande.row_count || '0';
+                displayTable('appro-viande', allData.fiche_appro_viande);
+            } else {
+                clearTable('appro-viande', allData.fiche_appro_viande?.error || 'Aucune donnée pour ce filtre');
+            }
             if (allData.calcul_viande?.data) {
                 document.getElementById('stat-viande').textContent = allData.calcul_viande.row_count || '0';
                 displayTable('viande', allData.calcul_viande);
@@ -736,6 +848,12 @@
             if (type === 'fiche') {
                 document.getElementById('stat-fiche').textContent = '0';
             }
+            if (type === 'emb-ingr') {
+                document.getElementById('stat-emb-ingr').textContent = '0';
+            }
+            if (type === 'appro-viande') {
+                document.getElementById('stat-appro-viande').textContent = '0';
+            }
             if (type === 'viande') {
                 document.getElementById('stat-viande').textContent = '0';
             }
@@ -746,8 +864,12 @@
 
         function clearDashboardData() {
             clearTable('fiche');
+            clearTable('emb-ingr');
+            clearTable('appro-viande');
             clearTable('viande');
             clearTable('emballage');
+            analysisFilterType = 'all';
+            analysisFilterProduct = 'all';
             const summary = document.getElementById('analysis-summary');
             const gaps = document.getElementById('analysis-gaps');
             if (summary) {
@@ -851,23 +973,25 @@
                 </div>
             `;
 
-            const topGaps = (analysisData.top_gaps || []).map(row => `
-                <tr>
-                    <td>${row.type}</td>
-                    <td>${row.metric}</td>
-                    <td>${row.real}</td>
-                    <td>${row.theoretical}</td>
-                    <td>${row.gap}</td>
-                    <td>${row.gap_pct}%</td>
-                </tr>
-            `).join('');
-
             const gapsHtml = `
-                <div class="chart-wrap">
-                    <canvas id="chart-top-gaps" height="140"></canvas>
+                <div class="filter-group" style="margin-bottom: 8px;">
+                    <label for="analysis-type-filter">Type</label>
+                    <select id="analysis-type-filter" onchange="onAnalysisTypeFilterChange()">
+                        <option value="all">Tous</option>
+                        <option value="viande">Viande</option>
+                        <option value="emballage">Emballage</option>
+                    </select>
+                    <label for="analysis-product-filter">Produit</label>
+                    <select id="analysis-product-filter" onchange="onAnalysisProductFilterChange()">
+                        <option value="all">Tous les produits</option>
+                    </select>
+                    <span id="analysis-filter-count" style="color: var(--text-muted); font-size: 0.9em;">0 produit(s)</span>
                 </div>
-                <div class="table-container" style="max-height: 360px;">
-                    <table>
+                <div class="chart-wrap">
+                    <canvas id="chart-top-gaps" height="260"></canvas>
+                </div>
+                <div class="table-container" style="max-height: 560px;">
+                    <table class="analysis-table">
                         <thead>
                             <tr>
                                 <th>Type</th>
@@ -878,15 +1002,102 @@
                                 <th>Écart %</th>
                             </tr>
                         </thead>
-                        <tbody>${topGaps}</tbody>
+                        <tbody id="analysis-gaps-body"></tbody>
                     </table>
                 </div>
             `;
 
             document.getElementById('analysis-summary').innerHTML = summaryHtml;
             document.getElementById('analysis-gaps').innerHTML = gapsHtml;
+            populateAnalysisFilters();
+            updateAnalysisFilteredView();
+        }
 
-            renderAnalysisCharts();
+        function getAnalysisRows() {
+            const meatRows = (analysisData?.meat_variances || []).map(row => ({ ...row, type: 'viande' }));
+            const packagingRows = (analysisData?.packaging_variances || []).map(row => ({ ...row, type: 'emballage' }));
+            return [...meatRows, ...packagingRows];
+        }
+
+        function populateAnalysisFilters() {
+            const typeSelect = document.getElementById('analysis-type-filter');
+            const productSelect = document.getElementById('analysis-product-filter');
+            if (!typeSelect || !productSelect) {
+                return;
+            }
+
+            const rows = getAnalysisRows();
+            const allowedTypes = ['all', 'viande', 'emballage'];
+            if (!allowedTypes.includes(analysisFilterType)) {
+                analysisFilterType = 'all';
+            }
+            typeSelect.value = analysisFilterType;
+
+            const byType = analysisFilterType === 'all'
+                ? rows
+                : rows.filter(row => row.type === analysisFilterType);
+            const products = [...new Set(byType.map(row => row.metric))].sort((a, b) => a.localeCompare(b));
+
+            productSelect.innerHTML = '<option value="all">Tous les produits</option>' +
+                products.map(metric => `<option value="${metric}">${metric}</option>`).join('');
+
+            if (analysisFilterProduct !== 'all' && !products.includes(analysisFilterProduct)) {
+                analysisFilterProduct = 'all';
+            }
+            productSelect.value = analysisFilterProduct;
+        }
+
+        function onAnalysisTypeFilterChange() {
+            const typeSelect = document.getElementById('analysis-type-filter');
+            analysisFilterType = typeSelect ? typeSelect.value : 'all';
+            analysisFilterProduct = 'all';
+            populateAnalysisFilters();
+            updateAnalysisFilteredView();
+        }
+
+        function onAnalysisProductFilterChange() {
+            const productSelect = document.getElementById('analysis-product-filter');
+            analysisFilterProduct = productSelect ? productSelect.value : 'all';
+            updateAnalysisFilteredView();
+        }
+
+        function getFilteredAnalysisRows() {
+            let rows = getAnalysisRows();
+            if (analysisFilterType !== 'all') {
+                rows = rows.filter(row => row.type === analysisFilterType);
+            }
+            if (analysisFilterProduct !== 'all') {
+                rows = rows.filter(row => row.metric === analysisFilterProduct);
+            }
+            return rows;
+        }
+
+        function updateAnalysisFilteredView() {
+            const rows = getFilteredAnalysisRows();
+            const countNode = document.getElementById('analysis-filter-count');
+            if (countNode) {
+                countNode.textContent = `${rows.length} produit(s)`;
+            }
+
+            const body = document.getElementById('analysis-gaps-body');
+            if (body) {
+                if (rows.length === 0) {
+                    body.innerHTML = '<tr><td colspan="6">Aucun produit pour ce filtre.</td></tr>';
+                } else {
+                    body.innerHTML = rows.map(row => `
+                        <tr>
+                            <td>${row.type}</td>
+                            <td>${row.metric}</td>
+                            <td>${row.real}</td>
+                            <td>${row.theoretical}</td>
+                            <td>${row.gap}</td>
+                            <td>${row.gap_pct}%</td>
+                        </tr>
+                    `).join('');
+                }
+            }
+
+            renderAnalysisCharts(rows);
         }
 
         function num(value) {
@@ -903,7 +1114,7 @@
             });
         }
 
-        function renderAnalysisCharts() {
+        function renderAnalysisCharts(filteredRows = []) {
             destroyCharts();
 
             const summary = analysisData.summary;
@@ -949,15 +1160,16 @@
 
             const varianceCanvas = document.getElementById('chart-variance');
             if (varianceCanvas) {
-                const meatRows = (analysisData.meat_variances || []).slice(0, 8);
+                const varianceRows = filteredRows;
+                varianceCanvas.height = Math.max(180, varianceRows.length * 26);
                 chartInstances.variance = new Chart(varianceCanvas, {
                     type: 'bar',
                     data: {
-                        labels: meatRows.map(r => r.metric),
+                        labels: varianceRows.map(r => `${r.metric} (${r.type})`),
                         datasets: [{
                             label: 'Écart (Réel - Théorique)',
-                            data: meatRows.map(r => num(r.gap)),
-                            backgroundColor: meatRows.map(r => num(r.gap) >= 0 ? '#f0a34a' : '#2f9e8f'),
+                            data: varianceRows.map(r => num(r.gap)),
+                            backgroundColor: varianceRows.map(r => num(r.gap) >= 0 ? '#f0a34a' : '#2f9e8f'),
                             borderRadius: 6,
                         }],
                     },
@@ -975,11 +1187,12 @@
 
             const topGapsCanvas = document.getElementById('chart-top-gaps');
             if (topGapsCanvas) {
-                const topRows = (analysisData.top_gaps || []).slice(0, 5);
+                const topRows = [...filteredRows].sort((a, b) => Math.abs(num(b.gap)) - Math.abs(num(a.gap)));
+                topGapsCanvas.height = Math.max(180, topRows.length * 26);
                 chartInstances.topGaps = new Chart(topGapsCanvas, {
                     type: 'bar',
                     data: {
-                        labels: topRows.map(r => r.metric),
+                        labels: topRows.map(r => `${r.metric} (${r.type})`),
                         datasets: [{
                             label: 'Écart absolu',
                             data: topRows.map(r => Math.abs(num(r.gap))),
@@ -1100,6 +1313,247 @@
             notification.textContent = '✅ ' + message;
             document.querySelector('.header').appendChild(notification);
             setTimeout(() => notification.remove(), 5000);
+        }
+
+        // Control Analysis Functions
+        let controlAnalysisData = null;
+
+        async function loadControlAnalysis() {
+            try {
+                const params = new URLSearchParams();
+                params.set('view', currentView);
+                if (currentView === 'day' && currentDate) {
+                    params.set('date', currentDate);
+                }
+                if (currentView === 'month' && currentMonth) {
+                    params.set('month', currentMonth);
+                }
+                if (currentView === 'range') {
+                    if (currentFromDate) {
+                        params.set('date_from', currentFromDate);
+                    }
+                    if (currentToDate) {
+                        params.set('date_to', currentToDate);
+                    }
+                }
+
+                const response = await fetch(`/api/analysis/control?${params.toString()}`);
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    document.getElementById('control-analysis-summary').innerHTML = '<div class="error">Impossible de charger l\'analyse contrôle</div>';
+                    document.getElementById('control-analysis-detail').innerHTML = '<div class="error">Impossible de charger le détail</div>';
+                    return;
+                }
+
+                controlAnalysisData = result.data;
+                renderControlAnalysis();
+            } catch (error) {
+                document.getElementById('control-analysis-summary').innerHTML = `<div class="error">Erreur: ${error.message}</div>`;
+                document.getElementById('control-analysis-detail').innerHTML = `<div class="error">Erreur: ${error.message}</div>`;
+            }
+        }
+
+        function renderControlAnalysis() {
+            if (!controlAnalysisData || !controlAnalysisData.summary) {
+                return;
+            }
+
+            const s = controlAnalysisData.summary;
+            const summaryHtml = `
+                <div class="kpi-strip">
+                    <div class="kpi-item">
+                        <div class="label">Réel Emb & Ingr (kg)</div>
+                        <div class="val">${s.real_totals.emb_ingr_kg}</div>
+                    </div>
+                    <div class="kpi-item">
+                        <div class="label">Entrée Emb & Ingr (kg)</div>
+                        <div class="val">${s.theoretical_totals.entry_emb_ingr_kg}</div>
+                    </div>
+                    <div class="kpi-item">
+                        <div class="label">Écart Emb & Ingr (%)</div>
+                        <div class="val">${s.efficiency.emb_ingr_gap_pct}%</div>
+                    </div>
+                    <div class="kpi-item">
+                        <div class="label">Écart Viande (%)</div>
+                        <div class="val">${s.efficiency.appro_viande_gap_pct}%</div>
+                    </div>
+                </div>
+                <div class="chart-wrap">
+                    <canvas id="chart-control-overview" height="120"></canvas>
+                </div>
+                <div class="chart-wrap">
+                    <canvas id="chart-control-variance" height="120"></canvas>
+                </div>
+                <div class="table-container" style="max-height: 220px;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>KPI</th>
+                                <th>Valeur</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Réel Emb & Ingr (kg)</td><td>${s.real_totals.emb_ingr_kg}</td></tr>
+                            <tr><td>Réel Appro Viande (kg)</td><td>${s.real_totals.appro_viande_kg}</td></tr>
+                            <tr><td>Entrée Emb & Ingr (kg)</td><td>${s.theoretical_totals.entry_emb_ingr_kg}</td></tr>
+                            <tr><td>Entrée Appro Viande (kg)</td><td>${s.theoretical_totals.entry_appro_viande_kg}</td></tr>
+                            <tr><td>Écart Emb & Ingr (kg)</td><td>${s.efficiency.emb_ingr_gap_kg}</td></tr>
+                            <tr><td>Écart Emb & Ingr (%)</td><td>${s.efficiency.emb_ingr_gap_pct}%</td></tr>
+                            <tr><td>Écart Viande (kg)</td><td>${s.efficiency.appro_viande_gap_kg}</td></tr>
+                            <tr><td>Écart Viande (%)</td><td>${s.efficiency.appro_viande_gap_pct}%</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            const gapsHtml = `
+                <div class="chart-wrap">
+                    <canvas id="chart-control-top-gaps" height="260"></canvas>
+                </div>
+                <div class="table-container" style="max-height: 560px;">
+                    <table class="analysis-table">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Métrique</th>
+                                <th>Réel</th>
+                                <th>Entrée</th>
+                                <th>Écart</th>
+                                <th>Écart %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="control-gaps-body"></tbody>
+                    </table>
+                </div>
+            `;
+
+            document.getElementById('control-analysis-summary').innerHTML = summaryHtml;
+            document.getElementById('control-analysis-detail').innerHTML = gapsHtml;
+            updateControlAnalysisFilteredView();
+        }
+
+        function getControlAnalysisRows() {
+            const embRows = (controlAnalysisData?.emb_ingr_variances || []).map(row => ({ ...row, type: 'emballage' }));
+            const viandeRows = (controlAnalysisData?.appro_viande_variances || []).map(row => ({ ...row, type: 'viande' }));
+            return [...embRows, ...viandeRows];
+        }
+
+        function updateControlAnalysisFilteredView() {
+            const rows = getControlAnalysisRows();
+            const body = document.getElementById('control-gaps-body');
+            if (body) {
+                if (rows.length === 0) {
+                    body.innerHTML = '<tr><td colspan="6">Aucun produit pour ce filtre.</td></tr>';
+                } else {
+                    body.innerHTML = rows.map(row => `
+                        <tr>
+                            <td>${row.type}</td>
+                            <td>${row.metric}</td>
+                            <td>${row.real}</td>
+                            <td>${row.theoretical}</td>
+                            <td>${row.gap}</td>
+                            <td>${row.gap_pct}%</td>
+                        </tr>
+                    `).join('');
+                }
+            }
+
+            renderControlAnalysisCharts(rows);
+        }
+
+        function renderControlAnalysisCharts(filteredRows) {
+            const overviewCanvas = document.getElementById('chart-control-overview');
+            if (overviewCanvas) {
+                if (chartInstances.controlOverview) {
+                    chartInstances.controlOverview.destroy();
+                }
+                chartInstances.controlOverview = new Chart(overviewCanvas, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Réel Emb & Ingr', 'Entrée Emb & Ingr', 'Réel Viande', 'Entrée Viande'],
+                        datasets: [{
+                            label: 'Quantités (kg)',
+                            data: [
+                                num(controlAnalysisData.summary.real_totals.emb_ingr_kg),
+                                num(controlAnalysisData.summary.theoretical_totals.entry_emb_ingr_kg),
+                                num(controlAnalysisData.summary.real_totals.appro_viande_kg),
+                                num(controlAnalysisData.summary.theoretical_totals.entry_appro_viande_kg),
+                            ],
+                            backgroundColor: ['#0f7ad4', '#0f7ad4', '#f0a34a', '#f0a34a'],
+                            borderRadius: 6,
+                        }],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { beginAtZero: true },
+                        },
+                    },
+                });
+            }
+
+            const varianceCanvas = document.getElementById('chart-control-variance');
+            if (varianceCanvas) {
+                if (chartInstances.controlVariance) {
+                    chartInstances.controlVariance.destroy();
+                }
+                const varianceRows = filteredRows;
+                varianceCanvas.height = Math.max(180, varianceRows.length * 26);
+                chartInstances.controlVariance = new Chart(varianceCanvas, {
+                    type: 'bar',
+                    data: {
+                        labels: varianceRows.map(r => `${r.metric} (${r.type})`),
+                        datasets: [{
+                            label: 'Écart (Réel - Entrée)',
+                            data: varianceRows.map(r => num(r.gap)),
+                            backgroundColor: varianceRows.map(r => num(r.gap) >= 0 ? '#f0a34a' : '#2f9e8f'),
+                            borderRadius: 6,
+                        }],
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { beginAtZero: true },
+                        },
+                    },
+                });
+            }
+
+            const topGapsCanvas = document.getElementById('chart-control-top-gaps');
+            if (topGapsCanvas) {
+                if (chartInstances.controlTopGaps) {
+                    chartInstances.controlTopGaps.destroy();
+                }
+                const topRows = [...filteredRows].sort((a, b) => Math.abs(num(b.gap)) - Math.abs(num(a.gap)));
+                topGapsCanvas.height = Math.max(180, topRows.length * 26);
+                chartInstances.controlTopGaps = new Chart(topGapsCanvas, {
+                    type: 'bar',
+                    data: {
+                        labels: topRows.map(r => `${r.metric} (${r.type})`),
+                        datasets: [{
+                            label: 'Écart absolu',
+                            data: topRows.map(r => Math.abs(num(r.gap))),
+                            backgroundColor: '#0f7ad4',
+                            borderRadius: 6,
+                        }],
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { beginAtZero: true },
+                        },
+                    },
+                });
+            }
         }
     </script>
 </body>
