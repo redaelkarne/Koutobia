@@ -17,6 +17,9 @@ if excel_dir_raw:
 else:
     EXCEL_DIR = BASE_DIR.parent.resolve()
 
+# Ensure the Excel directory exists across environments (local, Render, etc.)
+EXCEL_DIR.mkdir(parents=True, exist_ok=True)
+
 CACHE_DIR = BASE_DIR / "cache"
 HISTORY_DIR = CACHE_DIR / "history"
 UPLOADS_DIR = BASE_DIR / "uploads"

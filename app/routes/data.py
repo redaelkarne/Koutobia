@@ -227,19 +227,18 @@ async def upload_fiche_consommation(file: UploadFile = File(...)):
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        # Replace original file if possible; if locked, keep processing from uploaded file.
+        # Always process from uploaded file first to avoid dependency on existing source file.
+        data = ExcelReader.get_fiche_consommation(file_path=file_path)
+        CacheManager.save_to_cache("fiche_consommation", data, snapshot_date=snapshot_date)
+
+        # Try to synchronize the canonical source file, but do not fail the request if copy fails.
         copy_warning = None
         try:
             import shutil as sh
+            EXCEL_DIR.mkdir(parents=True, exist_ok=True)
             sh.copy(file_path, EXCEL_DIR / "Fiche_Complète_Contrôle_Approvisionnement_Interne.xlsx")
-            source_for_processing = None
-        except PermissionError:
-            source_for_processing = file_path
-            copy_warning = "Le fichier Excel source est ouvert/verrouille. Donnees traitees depuis le fichier uploade uniquement."
-        
-        # Refresh cache
-        data = ExcelReader.get_fiche_consommation(file_path=source_for_processing)
-        CacheManager.save_to_cache("fiche_consommation", data, snapshot_date=snapshot_date)
+        except Exception:
+            copy_warning = "Synchronisation vers EXCEL_DIR impossible. Donnees traitees depuis le fichier uploade."
         
         response = {
             "success": True,
@@ -269,19 +268,18 @@ async def upload_calcul_viande(file: UploadFile = File(...)):
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        # Replace original file if possible; if locked, keep processing from uploaded file.
+        # Always process from uploaded file first to avoid dependency on existing source file.
+        data = ExcelReader.get_calcul_viande(file_path=file_path)
+        CacheManager.save_to_cache("calcul_viande", data, snapshot_date=snapshot_date)
+
+        # Try to synchronize the canonical source file, but do not fail the request if copy fails.
         copy_warning = None
         try:
             import shutil as sh
+            EXCEL_DIR.mkdir(parents=True, exist_ok=True)
             sh.copy(file_path, EXCEL_DIR / "Calculateur_Ing_Viande 07,03,2026.xlsx")
-            source_for_processing = None
-        except PermissionError:
-            source_for_processing = file_path
-            copy_warning = "Le fichier Excel source est ouvert/verrouille. Donnees traitees depuis le fichier uploade uniquement."
-        
-        # Refresh cache
-        data = ExcelReader.get_calcul_viande(file_path=source_for_processing)
-        CacheManager.save_to_cache("calcul_viande", data, snapshot_date=snapshot_date)
+        except Exception:
+            copy_warning = "Synchronisation vers EXCEL_DIR impossible. Donnees traitees depuis le fichier uploade."
         
         response = {
             "success": True,
@@ -311,19 +309,18 @@ async def upload_emballage(file: UploadFile = File(...)):
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        # Replace original file if possible; if locked, keep processing from uploaded file.
+        # Always process from uploaded file first to avoid dependency on existing source file.
+        data = ExcelReader.get_emballage_synthese(file_path=file_path)
+        CacheManager.save_to_cache("emballage_synthese", data, snapshot_date=snapshot_date)
+
+        # Try to synchronize the canonical source file, but do not fail the request if copy fails.
         copy_warning = None
         try:
             import shutil as sh
+            EXCEL_DIR.mkdir(parents=True, exist_ok=True)
             sh.copy(file_path, EXCEL_DIR / "Calculateur_Emballage_V3.xlsx")
-            source_for_processing = None
-        except PermissionError:
-            source_for_processing = file_path
-            copy_warning = "Le fichier Excel source est ouvert/verrouille. Donnees traitees depuis le fichier uploade uniquement."
-        
-        # Refresh cache
-        data = ExcelReader.get_emballage_synthese(file_path=source_for_processing)
-        CacheManager.save_to_cache("emballage_synthese", data, snapshot_date=snapshot_date)
+        except Exception:
+            copy_warning = "Synchronisation vers EXCEL_DIR impossible. Donnees traitees depuis le fichier uploade."
         
         response = {
             "success": True,
